@@ -11,16 +11,17 @@ playerRadius = 0.03
 levelsRaw : [[(Float, Float)]]
 levelsRaw =
   [
-    [(1,1),(2,2)]
+    [(0,-80),(0,0),(50,0),(50,40),(0,40),(0,80)]
   ]
 
 
 -- view configuration
 
-manual = "Use your mouse to guide the ball safely to the goal."
-backBlue = rgb 20 20 90
-mazeBlue = rgb 40 40 170
-mazeRed = rgb 190 50 50
+manual = "Use your mouse to guide the ball safely to its goal."
+startText = "Please return to the start."
+backBlue = rgb  20  20  90
+mazeBlue = rgb  40  40 170
+mazeRed  = rgb 190  50  50
 
 
 -- Inputs
@@ -69,19 +70,26 @@ defaultGame =
 intPairToFloatPair : (Int,Int) -> (Float,Float)
 intPairToFloatPair (a, b) = (toFloat a, toFloat b)
 
-mousePosToGamePos : (Int,Int) -> (Int,Int) -> (Float, Float)
-mousePosToGamePos pos size =
+winPosToGamePos : (Int,Int) -> (Int,Int) -> (Float, Float)
+winPosToGamePos pos size =
   let
-    (mouseX, mouseY) = intPairToFloatPair pos
+    (winX, winY) = intPairToFloatPair pos
     (sizeX, sizeY) = intPairToFloatPair size
     (middleX, middleY) = (sizeX / 2, sizeY / 2)
   in
-    (mouseX - middleX, middleY - mouseY)
+    ((winX - middleX) / middleX, (middleY - winY) / middleY)
+
+gamePosToWinPos : Positioned a -> (Float,Float) -> (Float, Float)
+gamePosToWinPos {x,y} (sizeX,sizeY) =
+  let
+    (middleX, middleY) = (sizeX / 2, sizeY / 2)
+  in
+    (x * middleX, y * middleY)
 
 stepGame : Input -> Game -> Game
 stepGame {pos,size} ({state,player,level} as game) =
   let
-    (x,y) = mousePosToGamePos pos size
+    (x,y) = winPosToGamePos pos size
     player' = {player | x <- x,
                         y <- y}
   in
@@ -93,13 +101,15 @@ gameState = foldp stepGame defaultGame input
 
 -- Display
 
-make : Color -> Positioned a -> Shape -> Form
-make color obj shape = shape |> filled color
-                             |> move (obj.x,obj.y)
+make : Color -> (Float, Float) -> Shape -> Form
+make color (x,y) shape = shape |> filled color
+                             |> move (x,y)
 
 displayLevel : Level -> (Float,Float) -> State -> Element
 displayLevel level (w,h) state =
   let
+    winLevel = map (gamePosToWinPos)
+    --outline |> traced (dashed blue)
     color = if state == Alive then mazeBlue else mazeRed
   in
     spacer 1 1
@@ -107,15 +117,15 @@ displayLevel level (w,h) state =
 display : (Int,Int) -> Game -> Element
 display (winWidth,winHeight) {state,player,level} =
   let
-    w = toFloat winWidth
-    h = toFloat winHeight
-    edgeLen = min w h
-    r = edgeLen * player.r
+    edgeInt = min winWidth winHeight
+    edge = toFloat edgeInt
+    r = edge * player.r
+    winPos = gamePosToWinPos player (toFloat winWidth, toFloat winHeight)
   in
-    collage winWidth winHeight
-      [ rect w h |> filled backBlue
-      , displayLevel level (w,h) state |> toForm
-      , circle r |> make lightGray player
+    container winWidth winHeight middle <| collage edgeInt edgeInt
+      [ rect edge edge |> filled backBlue
+      , displayLevel level (edge,edge) state |> toForm
+      , circle r |> make lightGray winPos
       ]
 
 main = lift2 display Window.dimensions <| dropRepeats gameState
