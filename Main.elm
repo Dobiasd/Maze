@@ -6,31 +6,13 @@ import Window
 
 -- model configuration
 
-type Positioned a = { a | x:Float, y:Float }
-type Sized      a = { a | w:Float, h:Float }
-type Point = Positioned {}
-
---point : (Float, Float) -> Point
---point (x, y) = {x=x, y=y}
-
-point : Float -> Float -> Point
-point x y = {x=x, y=y}
-
-playerRadius = 7
-type Level = [Point]
+playerRadius = 0.03
 
 levelsRaw : [[(Float, Float)]]
 levelsRaw =
   [
     [(1,1),(2,2)]
   ]
-
-levels : [Level]
-levels =
-  let
-    convertLevel = map (\(x,y) -> point (x / 100) (y / 100))
-  in
-    map convertLevel levelsRaw
 
 
 -- view configuration
@@ -50,9 +32,23 @@ input = (Input <~ Mouse.position ~ Window.dimensions)
 
 -- Model
 
-data State = Alive | Dead
+type Positioned a = { a | x:Float, y:Float }
+type Sized      a = { a | w:Float, h:Float }
+type Point = Positioned {}
+type Level = [Point]
 
+data State = Alive | Dead
 type Ball = Positioned { r:Float }
+
+point : Float -> Float -> Point
+point x y = {x=x, y=y}
+
+levels : [Level]
+levels =
+  let
+    convertLevel = map (\(x,y) -> point (x / 100) (y / 100))
+  in
+    map convertLevel levelsRaw
 
 ball : Float -> Float -> Float -> Ball
 ball x y r = {x=x, y=y, r=r }
