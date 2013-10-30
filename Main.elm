@@ -18,7 +18,9 @@ levelsRaw =
 -- view configuration
 
 manual = "Use your mouse to guide the ball safely to the goal."
-mazeBlue = rgb 40 40 180
+backBlue = rgb 20 20 90
+mazeBlue = rgb 40 40 170
+mazeRed = rgb 190 50 50
 
 
 -- Inputs
@@ -95,15 +97,25 @@ make : Color -> Positioned a -> Shape -> Form
 make color obj shape = shape |> filled color
                              |> move (obj.x,obj.y)
 
+displayLevel : Level -> (Float,Float) -> State -> Element
+displayLevel level (w,h) state =
+  let
+    color = if state == Alive then mazeBlue else mazeRed
+  in
+    spacer 1 1
+
 display : (Int,Int) -> Game -> Element
 display (winWidth,winHeight) {state,player,level} =
   let
     w = toFloat winWidth
     h = toFloat winHeight
+    edgeLen = min w h
+    r = edgeLen * player.r
   in
     collage winWidth winHeight
-      [ rect w h |> filled mazeBlue
-      , circle player.r |> make lightGray player
+      [ rect w h |> filled backBlue
+      , displayLevel level (w,h) state |> toForm
+      , circle r |> make lightGray player
       ]
 
 main = lift2 display Window.dimensions <| dropRepeats gameState
