@@ -6,7 +6,9 @@ import Window
 
 -- model configuration
 
-playerRadius = 0.03
+(gameWidth,gameHeight) = (100,100)
+(halfWidth,halfHeight) = (toFloat gameWidth / 2, toFloat gameHeight / 2)
+playerRadius = 3
 
 levelsRaw : [[(Float, Float)]]
 levelsRaw =
@@ -76,15 +78,10 @@ winPosToGamePos pos size =
     (winX, winY) = intPairToFloatPair pos
     (sizeX, sizeY) = intPairToFloatPair size
     (middleX, middleY) = (sizeX / 2, sizeY / 2)
+    factor = gameScale size (gameWidth,gameHeight)
   in
-    ((winX - middleX) / middleX, (middleY - winY) / middleY)
-
-gamePosToWinPos : Positioned a -> (Float,Float) -> (Float, Float)
-gamePosToWinPos {x,y} (sizeX,sizeY) =
-  let
-    (middleX, middleY) = (sizeX / 2, sizeY / 2)
-  in
-    (x * middleX, y * middleY)
+    --(gameWidth * (winX - middleX) / factor, gameHeight * (middleY - winY) / factor)
+    ((winX - middleX)  / factor, (middleY - winY) / factor)
 
 stepGame : Input -> Game -> Game
 stepGame {pos,size} ({state,player,level} as game) =
@@ -105,27 +102,30 @@ make : Color -> (Float, Float) -> Shape -> Form
 make color (x,y) shape = shape |> filled color
                              |> move (x,y)
 
-displayLevel : Level -> (Float,Float) -> State -> Element
-displayLevel level (w,h) state =
+displayLevel : Level -> State -> Element
+displayLevel level state =
   let
-    winLevel = map (gamePosToWinPos)
-    --outline |> traced (dashed blue)
     color = if state == Alive then mazeBlue else mazeRed
   in
     spacer 1 1
 
-display : (Int,Int) -> Game -> Element
-display (winWidth,winHeight) {state,player,level} =
-  let
-    edgeInt = min winWidth winHeight
-    edge = toFloat edgeInt
-    r = edge * player.r
-    winPos = gamePosToWinPos player (toFloat winWidth, toFloat winHeight)
-  in
-    container winWidth winHeight middle <| collage edgeInt edgeInt
-      [ rect edge edge |> filled backBlue
-      , displayLevel level (edge,edge) state |> toForm
-      , circle r |> make lightGray winPos
-      ]
+display : Game -> Form
+display {state,player,level} =
+  group
+    [ rect gameWidth gameHeight |> filled backBlue
+    , displayLevel level state |> toForm
+    , circle player.r |> make lightGray (player.x, player.y)
+    ]
 
-main = lift2 display Window.dimensions <| dropRepeats gameState
+gameScale : (Int,Int) -> (Float,Float) -> Float
+gameScale (winW, winH) (gameW,gameH) =
+  min (toFloat winW / gameW) (toFloat winH / gameH)
+
+displayFullScreen : (Int,Int) -> Game -> Element
+displayFullScreen (w,h) game =
+  let
+    factor = gameScale (w,h) (gameWidth,gameHeight)
+  in
+    collage w h [display game |> scale factor]
+
+main = lift2 displayFullScreen Window.dimensions <| dropRepeats gameState
