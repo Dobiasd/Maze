@@ -93,14 +93,59 @@ winPosToGamePos pos size =
   in
     ((winX - middleX)  / factor, (middleY - winY) / factor)
 
+dist {x,y} = sqrt (x^2 + y^2)
+
+includes : Ball -> Ball -> Bool
+includes outer inner =
+  let
+    centerDiff = point (abs (outer.x - inner.x)) (abs (outer.y - inner.y))
+    centerDist = dist centerDiff
+    radiiDiff = outer.r - inner.r
+  in
+    radiiDiff > centerDist
+
+
+dist2 : Point -> Point -> Float
+dist2 v w = (v.x - w.x)^2 + (v.y - w.y)^2
+
+distToSegmentSquared : Point -> Point -> Point -> Float
+distToSegmentSquared p v w =
+  let
+    l2 = dist2 v w
+    t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2
+    nearestP = point (v.x + t * (w.x - v.x)) (v.y + t * (w.y - v.y))
+  in
+    if | l2 == 0 -> dist2 p v
+       | t < 0 -> dist2 p v
+       | t > 1 -> dist2 p w
+       | otherwise -> dist2 p nearestP
+
+distToSegment : Point -> Point -> Point -> Float
+distToSegment p v w = sqrt <| distToSegmentSquared p v w
+
+
+inLevel : Ball -> Level -> Bool
+inLevel player level =
+  let
+    knotPairs = pairWise level
+    knotToPoint k = point k.x k.y
+  in
+    any (\(k1, k2) -> distToSegment (knotToPoint player) (knotToPoint k1) (knotToPoint k2) < k1.r - player.r) knotPairs
+
+
 stepGame : Input -> Game -> Game
 stepGame {pos,size} ({state,player,level} as game) =
   let
     (x,y) = winPosToGamePos pos size
     player' = {player | x <- x,
                         y <- y}
+    start = head level
+    atStart = start `includes` player
+    crash = not <| player `inLevel` level
+    state' = if crash then Dead else if atStart then Alive else state
   in
-    {game | player <- player'}
+    {game | player <- player',
+            state <- state'}
 
 gameState : Signal Game
 gameState = foldp stepGame defaultGame input
@@ -136,10 +181,12 @@ displayLevel level state =
   let
     col = if state == Alive then mazeBlue else mazeRed
     knotPairs = pairWise level
+    knotCircle col k = circle k.r |> make col (k.x, k.y)
   in
     group <|
       map (uncurry <| displayLevelLine col) knotPairs
-      ++ map (\k -> circle (2 * k.r) |> make col (k.x, k.y)) level
+      ++ map (\(k1,k2) -> circle (k1.r) |> make col (k2.x, k2.y)) knotPairs
+      ++ [(knotCircle green <| head level)]
 
 display : Game -> Form
 display {state,player,level} =
