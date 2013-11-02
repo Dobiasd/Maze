@@ -10,28 +10,45 @@ import Window
 (halfWidth,halfHeight) = (toFloat gameWidth / 2, toFloat gameHeight / 2)
 playerRadius = 3
 
--- ((x,y),size from this knot on)
+
+type RawLevelKnot = ((Float,Float),Float)
+rawLevelKnot x y r = ((x,y),r)
+
 type RawLevel = [((Float,Float),Float)]
+
 levelsRaw : [RawLevel]
 levelsRaw =
   [
-    [((  0,-70), 4)
-   , ((  0,  0), 3.6)
-   , (( 50,  0), 3.0)
-   , (( 50, 40), 2.4)
-   , ((  0, 40), 2)
-   , ((  0, 80), 1.3)]
+    [
+      rawLevelKnot   0 -70  4
+    , rawLevelKnot   0   0  3.6
+    , rawLevelKnot  50   0  3.0
+    , rawLevelKnot  50  40  2.4
+    , rawLevelKnot   0  40  2
+    , rawLevelKnot   0  70  1.4
+    ]
+  , [
+      rawLevelKnot   0  70  3.6
+    , rawLevelKnot  60  30  3.2
+    , rawLevelKnot -50 -10  2.8
+    , rawLevelKnot  70 -20  1.3
+    ]
+  , [
+      rawLevelKnot  70 -20  3
+    , rawLevelKnot  40  80  2.5
+    , rawLevelKnot  10 -60  2.1
+    , rawLevelKnot -30  60  1.6
+    , rawLevelKnot -70 -40  1.2
+    ]
   ]
 
 
 -- view configuration
 
-manual = "Use your mouse to guide the ball safely to its goal."
-startText = "Please return to the start."
-backBlue = rgb  20  20  90
-mazeBlue = rgb  40  40 170
-mazeRed  = rgb 190  50  50
-
+manualText = "Use your mouse to guide the ball safely to its goal (green)."
+restartText = "Please return to the start (yellow)."
+textHeight = 5
+textFormPosY = -90
 
 -- Inputs
 
@@ -49,7 +66,7 @@ type Sized      a = { a | w:Float, h:Float }
 type Point = Positioned {}
 type Level = [Ball]
 
-data State = Alive | Dead
+data State = Alive | Dead | Won
 type Ball = Positioned { r:Float }
 type LevelKnot = Ball
 
@@ -69,13 +86,13 @@ generateLevel = scaleLevelWidth . map (uncurry levelKnot)
 levels : [Level]
 levels = map generateLevel levelsRaw
 
-type Game = { state:State, player:Ball, level:Level }
+type Game = { state:State, player:Ball, levelsLeft:[Level] }
 
 defaultGame : Game
 defaultGame =
   { state  = Dead,
     player = ball (0,0) playerRadius,
-    level = head levels }
+    levelsLeft = levels }
 
 
 -- Updates
@@ -132,20 +149,35 @@ inLevel player level =
   in
     any (\(k1, k2) -> distToSegment (knotToPoint player) (knotToPoint k1) (knotToPoint k2) < k1.r - player.r) knotPairs
 
+-- todo:
+-- click to restart
+-- points
+-- time (display can be switched off)
+-- cutting sharp should not kill you. ;-)
 
 stepGame : Input -> Game -> Game
-stepGame {pos,size} ({state,player,level} as game) =
+stepGame {pos,size} ({state,player,levelsLeft} as game) =
   let
+    level = head levelsLeft
     (x,y) = winPosToGamePos pos size
     player' = {player | x <- x,
                         y <- y}
-    start = head level
-    atStart = start `includes` player
+    atStart = head level `includes` player
     crash = not <| player `inLevel` level
-    state' = if crash then Dead else if atStart then Alive else state
+    atGoal = last level `includes` player
+    lastLevel = length levelsLeft == 1
+    levelsLeft' = if | state == Alive && atGoal ->
+                       if lastLevel then levelsLeft else tail levelsLeft
+                     | otherwise -> levelsLeft
+    state' = if | state == Won -> Won
+                | atGoal && lastLevel -> Won
+                | crash -> Dead
+                | atStart -> Alive
+                | otherwise -> state
   in
     {game | player <- player',
-            state <- state'}
+            state <- state',
+            levelsLeft <- levelsLeft'}
 
 gameState : Signal Game
 gameState = foldp stepGame defaultGame input
@@ -175,26 +207,44 @@ pairWise xs = case xs of
                 [] -> []
                 _  -> zip xs (tail xs)
 
+noForm : Form
+noForm = rect 0 0 |> filled (rgba 0 0 0 0)
 
 displayLevel : Level -> State -> Form
 displayLevel level state =
   let
-    col = if state == Alive then mazeBlue else mazeRed
+    col = case state of
+            Alive -> blue
+            Dead -> red
+            Won -> green
     knotPairs = pairWise level
     knotCircle col k = circle k.r |> make col (k.x, k.y)
   in
     group <|
       map (uncurry <| displayLevelLine col) knotPairs
       ++ map (\(k1,k2) -> circle (k1.r) |> make col (k2.x, k2.y)) knotPairs
-      ++ [(knotCircle green <| head level)]
+      ++ [(knotCircle yellow <| head level)]
+      ++ [(knotCircle green <| last level)]
 
 display : Game -> Form
-display {state,player,level} =
-  group
-    [ rect gameWidth gameHeight |> filled backBlue
-    , displayLevel level state
-    , circle player.r |> make lightGray (player.x, player.y)
-    ]
+display {state,player,levelsLeft} =
+  let
+    level = head levelsLeft
+    showText = if state == Alive then manualText else restartText
+    textForm = txt (Text.height textHeight) showText
+                 |> toForm |> move (0, textFormPosY)
+
+  in
+    group
+      [ rect gameWidth gameHeight |> filled darkBlue
+      , displayLevel level state
+      , circle player.r |> make lightGray (player.x, player.y)
+      , textForm
+      , asText state |> toForm
+      ]
+
+txt : (Text -> Text) -> String -> Element
+txt f = text . f . monospace . Text.color lightBlue . toText
 
 gameScale : (Int,Int) -> (Float,Float) -> Float
 gameScale (winW, winH) (gameW,gameH) =
@@ -205,6 +255,6 @@ displayFullScreen (w,h) game =
   let
     factor = gameScale (w,h) (gameWidth,gameHeight)
   in
-    collage w h [display game |> scale factor]
+    collage w h [ display game |> scale factor ]
 
 main = lift2 displayFullScreen Window.dimensions <| dropRepeats gameState
