@@ -6,14 +6,21 @@ import Window
 
 -- model configuration
 
-(gameWidth,gameHeight) = (100,100)
+(gameWidth,gameHeight) = (200,200)
 (halfWidth,halfHeight) = (toFloat gameWidth / 2, toFloat gameHeight / 2)
 playerRadius = 3
 
-levelsRaw : [[(Float, Float)]]
+-- ((x,y),size from this knot on)
+type RawLevel = [((Float,Float),Float)]
+levelsRaw : [RawLevel]
 levelsRaw =
   [
-    [(0,-80),(0,0),(50,0),(50,40),(0,40),(0,80)]
+    [((  0,-70), 4)
+   , ((  0,  0), 3.6)
+   , (( 50,  0), 3.0)
+   , (( 50, 40), 2.4)
+   , ((  0, 40), 2)
+   , ((  0, 80), 1.3)]
   ]
 
 
@@ -40,30 +47,34 @@ input = (Input <~ Mouse.position ~ Window.dimensions)
 type Positioned a = { a | x:Float, y:Float }
 type Sized      a = { a | w:Float, h:Float }
 type Point = Positioned {}
-type Level = [Point]
+type Level = [Ball]
 
 data State = Alive | Dead
 type Ball = Positioned { r:Float }
+type LevelKnot = Ball
 
 point : Float -> Float -> Point
 point x y = {x=x, y=y}
 
-levels : [Level]
-levels =
-  let
-    convertLevel = map (\(x,y) -> point (x / 100) (y / 100))
-  in
-    map convertLevel levelsRaw
+ball : (Float,Float) -> Float -> Ball
+ball (x,y) r = {x=x, y=y, r=r }
+levelKnot = ball
 
-ball : Float -> Float -> Float -> Ball
-ball x y r = {x=x, y=y, r=r }
+scaleLevelWidth : Level -> Level
+scaleLevelWidth = map (\k -> { k | r <- k.r * playerRadius })
+
+generateLevel : RawLevel -> Level
+generateLevel = scaleLevelWidth . map (uncurry levelKnot)
+
+levels : [Level]
+levels = map generateLevel levelsRaw
 
 type Game = { state:State, player:Ball, level:Level }
 
 defaultGame : Game
 defaultGame =
   { state  = Dead,
-    player = ball 0 0 playerRadius,
+    player = ball (0,0) playerRadius,
     level = head levels }
 
 
@@ -80,7 +91,6 @@ winPosToGamePos pos size =
     (middleX, middleY) = (sizeX / 2, sizeY / 2)
     factor = gameScale size (gameWidth,gameHeight)
   in
-    --(gameWidth * (winX - middleX) / factor, gameHeight * (middleY - winY) / factor)
     ((winX - middleX)  / factor, (middleY - winY) / factor)
 
 stepGame : Input -> Game -> Game
@@ -100,20 +110,42 @@ gameState = foldp stepGame defaultGame input
 
 make : Color -> (Float, Float) -> Shape -> Form
 make color (x,y) shape = shape |> filled color
-                             |> move (x,y)
+                               |> move (x,y)
 
-displayLevel : Level -> State -> Element
+levelKnotsToPath : LevelKnot -> LevelKnot -> Path
+levelKnotsToPath k1 k2 = path [(k1.x,k1.y),(k2.x,k2.y)]
+
+displayLevelLine : Color -> LevelKnot -> LevelKnot -> Form
+displayLevelLine col k1 k2 =
+  let
+    p = levelKnotsToPath k1 k2
+    colStyle = solid col
+    ls = { colStyle | width <- 2 * k1.r }
+  in
+    p |> traced ls
+
+
+pairWise : [a] -> [(a,a)]
+pairWise xs = case xs of
+                [] -> []
+                _  -> zip xs (tail xs)
+
+
+displayLevel : Level -> State -> Form
 displayLevel level state =
   let
-    color = if state == Alive then mazeBlue else mazeRed
+    col = if state == Alive then mazeBlue else mazeRed
+    knotPairs = pairWise level
   in
-    spacer 1 1
+    group <|
+      map (uncurry <| displayLevelLine col) knotPairs
+      ++ map (\k -> circle (2 * k.r) |> make col (k.x, k.y)) level
 
 display : Game -> Form
 display {state,player,level} =
   group
     [ rect gameWidth gameHeight |> filled backBlue
-    , displayLevel level state |> toForm
+    , displayLevel level state
     , circle player.r |> make lightGray (player.x, player.y)
     ]
 
