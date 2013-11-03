@@ -1,6 +1,7 @@
 module Maze where
 
 import Mouse
+import Touch
 import Window
 
 
@@ -50,7 +51,7 @@ levelsRaw =
 
 -- view configuration
 
-manualText = "Use your mouse to guide the ball safely to its goal (green)."
+manualText = "Guide the ball safely to its goal (green)."
 restartText = "Please return to the start (yellow)."
 textHeight = 5
 textFormPosY = -90
@@ -59,8 +60,24 @@ textFormPosY = -90
 
 type Input = { pos:(Int,Int), size:(Int,Int) }
 
+touchPosition : Touch.Touch -> (Int,Int)
+touchPosition touch = (touch.x,touch.y)
+
+touchPositions : Signal [(Int,Int)]
+touchPositions = lift (\touches -> map touchPosition touches) Touch.touches
+
+firstTouchPosition : Signal (Int,Int)
+firstTouchPosition = keepIf (\tps -> length tps == 1) [(0,0)] touchPositions
+                       |> lift (\tps -> head tps)
+
+cursor = merge Mouse.position firstTouchPosition
+
 input : Signal Input
-input = (Input <~ Mouse.position ~ Window.dimensions)
+input = (Input <~ cursor ~ Window.dimensions)
+
+type TimestampedInput = Signal (Time, Input)
+timestampedInput : TimestampedInput
+timestampedInput = timestamp input
 
 
 -- Model
@@ -202,8 +219,8 @@ stepWon : Input -> Game -> Game
 stepWon _ ({state,player,levelsLeft} as game) =
   game
 
-stepGame : Input -> Game -> Game
-stepGame ({pos,size} as input) ({state,player} as game) =
+stepGame : Time -> Input -> Game -> Game
+stepGame sysTime ({pos,size} as input) ({state,player} as game) =
   let
     (x,y) = winPosToGamePos pos size
     player' = {player | x <- x, y <- y}
@@ -214,7 +231,7 @@ stepGame ({pos,size} as input) ({state,player} as game) =
     func input { game | player <- player' }
 
 gameState : Signal Game
-gameState = foldp stepGame defaultGame input
+gameState = foldp (uncurry stepGame) defaultGame timestampedInput
 
 
 -- Display
