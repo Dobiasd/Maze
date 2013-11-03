@@ -213,7 +213,8 @@ stepAlive sysTime _ ({state,player,levelsLeft
                     as game) =
   let
     level = head levelsLeft
-    crash = not <| player `inLevel` level
+    --crash = not <| player `inLevel` level
+    crash = False
     atGoal = last level `includes` player
     lastLevel = length levelsLeft == 1
     levelsLeft' = if | atGoal && not lastLevel -> tail levelsLeft
@@ -320,9 +321,9 @@ display {state,player,levelsLeft,timeSum} =
     level = head levelsLeft
     showText = case state of
                  Dead -> respawnText
-                 Won -> "Congratulations! It took you "
+                 Won -> "Yeah! It took you "
                         ++ (show timeSum) ++ " seconds."
-                        ++ " Click to improve. :)"
+                        ++ " Click (or refresh) to improve. :)"
                  _ -> manualText
     textForm = txt (Text.height textHeight) showText
                  |> toForm |> move (0, textPosY)
