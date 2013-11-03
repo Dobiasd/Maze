@@ -22,42 +22,42 @@ levelsRaw =
   [
     [
       rawLevelKnot -70 -70  4
-    , rawLevelKnot  30  70  3.5
-    , rawLevelKnot   0 -70  2
+    , rawLevelKnot  30  70  3.6
+    , rawLevelKnot   0 -70  2.3
     ]
   , [
       rawLevelKnot   0 -70  4
-    , rawLevelKnot   0   0  3.6
-    , rawLevelKnot  50   0  3.0
-    , rawLevelKnot  50  40  2.4
-    , rawLevelKnot   0  40  2
-    , rawLevelKnot   0  70  1.5
+    , rawLevelKnot   0   0  3.7
+    , rawLevelKnot  50   0  3.3
+    , rawLevelKnot  50  40  2.7
+    , rawLevelKnot   0  40  2.3
+    , rawLevelKnot   0  70  1.9
     ]
   , [
-      rawLevelKnot   0  70  3.6
-    , rawLevelKnot  60  30  3.2
+      rawLevelKnot   0  70  3.7
+    , rawLevelKnot  60  30  3.4
     , rawLevelKnot -50 -10  2.8
-    , rawLevelKnot  70 -20  1.4
+    , rawLevelKnot  70 -20  1.7
     ]
   , [
       rawLevelKnot  70 -20  3
     , rawLevelKnot  40  80  2.5
     , rawLevelKnot  10 -60  2.1
-    , rawLevelKnot -30  60  1.6
-    , rawLevelKnot -70 -40  1.3
+    , rawLevelKnot -30  60  1.9
+    , rawLevelKnot -70 -40  1.6
     ]
   , [
-      rawLevelKnot -70 -40  2.6
-    , rawLevelKnot -70  70  2.5
-    , rawLevelKnot  70  70  2.4
-    , rawLevelKnot  70 -70  2.3
-    , rawLevelKnot -40 -70  2.2
-    , rawLevelKnot -40  40  2.1
-    , rawLevelKnot  40  40  2.0
+      rawLevelKnot -70 -40  2.5
+    , rawLevelKnot -70  70  2.4
+    , rawLevelKnot  70  70  2.3
+    , rawLevelKnot  70 -70  2.2
+    , rawLevelKnot -40 -70  2.1
+    , rawLevelKnot -40  40  2.0
+    , rawLevelKnot  40  40  1.9
     , rawLevelKnot  40 -40  1.8
-    , rawLevelKnot -15 -40  1.6
-    , rawLevelKnot -15  15  1.4
-    , rawLevelKnot  10 -10  1.2
+    , rawLevelKnot -15 -40  1.7
+    , rawLevelKnot -15  15  1.6
+    , rawLevelKnot  10 -10  1.5
     ]
   ]
 
