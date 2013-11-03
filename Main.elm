@@ -22,8 +22,8 @@ levelsRaw =
   [
     [
       rawLevelKnot -70 -70  4
-    , rawLevelKnot  30  70  4
-    , rawLevelKnot   0 -70  4
+    , rawLevelKnot  30  70  3.5
+    , rawLevelKnot   0 -70  2
     ]
   , [
       rawLevelKnot   0 -70  4
@@ -31,20 +31,33 @@ levelsRaw =
     , rawLevelKnot  50   0  3.0
     , rawLevelKnot  50  40  2.4
     , rawLevelKnot   0  40  2
-    , rawLevelKnot   0  70  1.4
+    , rawLevelKnot   0  70  1.5
     ]
   , [
       rawLevelKnot   0  70  3.6
     , rawLevelKnot  60  30  3.2
     , rawLevelKnot -50 -10  2.8
-    , rawLevelKnot  70 -20  1.3
+    , rawLevelKnot  70 -20  1.4
     ]
   , [
       rawLevelKnot  70 -20  3
     , rawLevelKnot  40  80  2.5
     , rawLevelKnot  10 -60  2.1
     , rawLevelKnot -30  60  1.6
-    , rawLevelKnot -70 -40  1.2
+    , rawLevelKnot -70 -40  1.3
+    ]
+  , [
+      rawLevelKnot -70 -40  2.6
+    , rawLevelKnot -70  70  2.5
+    , rawLevelKnot  70  70  2.4
+    , rawLevelKnot  70 -70  2.3
+    , rawLevelKnot -40 -70  2.2
+    , rawLevelKnot -40  40  2.1
+    , rawLevelKnot  40  40  2.0
+    , rawLevelKnot  40 -40  1.8
+    , rawLevelKnot -15 -40  1.6
+    , rawLevelKnot -15  15  1.4
+    , rawLevelKnot  10 -10  1.2
     ]
   ]
 
@@ -58,9 +71,10 @@ timeTextPosY = 95
 textHeight = 5
 textPosY = -90
 
+
 -- Inputs
 
-type Input = { pos:(Int,Int), size:(Int,Int), clicked:Bool }
+type Input = { pos:(Int,Int), size:(Int,Int), clicked:Bool, delta:Float }
 
 touchPosition : Touch.Touch -> (Int,Int)
 touchPosition touch = (touch.x,touch.y)
@@ -74,8 +88,10 @@ firstTouchPosition = keepIf (\tps -> length tps == 1) [(0,0)] touchPositions
 
 cursor = merge Mouse.position firstTouchPosition
 
+ticker = lift (\t -> t / 1000) <| fps 10
+
 input : Signal Input
-input = (Input <~ cursor ~ Window.dimensions ~ Mouse.isClicked)
+input = (Input <~ cursor ~ Window.dimensions ~ Mouse.isClicked ~ ticker)
 
 type TimestampedInput = Signal (Time, Input)
 timestampedInput : TimestampedInput
@@ -109,14 +125,21 @@ generateLevel = scaleLevelWidth . map (uncurry levelKnot)
 levels : [Level]
 levels = map generateLevel levelsRaw
 
-type Game = { state:State, player:Ball, levelsLeft:[Level], time:Float }
+type Game = { state:State
+            , player:Ball
+            , levelsLeft:[Level]
+            , lastRespawnTime:Float
+            , oldTimeSum:Float
+            , timeSum:Float }
 
 defaultGame : Game
 defaultGame =
-  { state  = Dead,
-    player = ball (0,0) playerRadius,
-    levelsLeft = levels,
-    time = 0 }
+  { state  = Dead
+  , player = ball (0,0) playerRadius
+  , levelsLeft = levels
+  , lastRespawnTime = 0
+  , oldTimeSum = 0
+  , timeSum = 0 }
 
 
 -- Updates
@@ -145,13 +168,11 @@ includes outer inner =
   in
     radiiDiff > centerDist
 
-
-dist2 : Point -> Point -> Float
-dist2 v w = (v.x - w.x)^2 + (v.y - w.y)^2
-
 distToSegmentSquared : Point -> Point -> Point -> Float
 distToSegmentSquared p v w =
   let
+    dist2 : Point -> Point -> Float
+    dist2 v w = (v.x - w.x)^2 + (v.y - w.y)^2
     l2 = dist2 v w
     t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2
     nearestP = point (v.x + t * (w.x - v.x)) (v.y + t * (w.y - v.y))
@@ -174,27 +195,25 @@ inLevel player level =
     any (\(k1, k2) -> distToSegment (knotToPoint player) (knotToPoint k1) (knotToPoint k2) < k1.r - player.r) knotPairs
 
 -- todo:
--- time (display can be switched off) - use timestamp signal
 -- cutting sharp should not kill you. ;-)
 
-
-stepReady : Input -> Game -> Game
-stepReady _ ({state,player,levelsLeft} as game) =
+stepReady : Time -> Input -> Game -> Game
+stepReady _ _ ({state,player,levelsLeft} as game) =
   let
     level = head levelsLeft
     atStart = head level `includes` player
     state' = if | atStart -> Alive
                 | otherwise -> Ready
   in
-    {game | state <- state',
-            time <- 0 }
+    {game | state <- state' }
 
-stepAlive : Input -> Game -> Game
-stepAlive _ ({state,player,levelsLeft,time} as game) =
+stepAlive : Time -> Input -> Game -> Game
+stepAlive sysTime _ ({state,player,levelsLeft
+                    ,lastRespawnTime,oldTimeSum,timeSum}
+                    as game) =
   let
     level = head levelsLeft
-    --crash = not <| player `inLevel` level
-    crash = False
+    crash = not <| player `inLevel` level
     atGoal = last level `includes` player
     lastLevel = length levelsLeft == 1
     levelsLeft' = if | atGoal && not lastLevel -> tail levelsLeft
@@ -202,22 +221,30 @@ stepAlive _ ({state,player,levelsLeft,time} as game) =
     state' = if | atGoal && lastLevel -> Won
                 | crash -> Dead
                 | otherwise -> Alive
+    (oldTimeSum', lastRespawnTime') = if | state' == Dead -> (oldTimeSum + sysTime - lastRespawnTime, sysTime)
+                                         | otherwise -> (oldTimeSum, lastRespawnTime)
+    timeSumPrec = oldTimeSum' + sysTime - lastRespawnTime'
+    timeSum' = (toFloat . round) (timeSumPrec / 100) / 10
   in
     {game | state <- state',
-            levelsLeft <- levelsLeft' }
+            levelsLeft <- levelsLeft',
+            lastRespawnTime <- lastRespawnTime',
+            oldTimeSum <- oldTimeSum',
+            timeSum <- timeSum' }
 
-stepDead : Input -> Game -> Game
-stepDead _ ({state,player,levelsLeft} as game) =
+stepDead : Time -> Input -> Game -> Game
+stepDead sysTime _ ({state,player,levelsLeft,lastRespawnTime} as game) =
   let
     level = head levelsLeft
     atStart = head level `includes` player
     state' = if | atStart -> Alive
                 | otherwise -> Dead
   in
-    {game | state <- state'}
+    {game | state <- state',
+            lastRespawnTime <- sysTime}
 
-stepWon : Input -> Game -> Game
-stepWon {clicked} ({state,player,levelsLeft} as game) =
+stepWon : Time -> Input -> Game -> Game
+stepWon _ {clicked} ({state,player,levelsLeft} as game) =
   let
     (state',levelsLeft') = if | clicked -> (Dead,levels)
                              | otherwise -> (Won,levelsLeft)
@@ -234,7 +261,7 @@ stepGame sysTime ({pos,size} as input) ({state,player} as game) =
               | state == Dead -> stepDead
               | state == Won -> stepWon
   in
-    func input { game | player <- player' }
+    func sysTime input { game | player <- player' }
 
 gameState : Signal Game
 gameState = foldp (uncurry stepGame) defaultGame timestampedInput
@@ -271,11 +298,9 @@ displayLevel : Level -> State -> Form
 displayLevel level state =
   let
     col = case state of
-            --Alive -> blue
-            --Dead -> red
             Alive -> rgba 0 255 255 0.4
             Dead -> rgba 255 0 0 0.4
-            Won -> green
+            Won -> rgba 0 255 0 0.4
     knotPairs = pairWise level
     knotCircle col k = circle k.r |> make col (k.x, k.y)
   in
@@ -286,18 +311,18 @@ displayLevel level state =
       ++ [(knotCircle green <| last level)]
 
 display : Game -> Form
-display {state,player,levelsLeft,time} =
+display {state,player,levelsLeft,timeSum} =
   let
     level = head levelsLeft
     showText = case state of
                  Dead -> respawnText
                  Won -> "Congratulations! It took you "
-                        ++ (show time) ++ " seconds."
+                        ++ (show timeSum) ++ " seconds."
                         ++ " Click to improve. :)"
                  _ -> manualText
     textForm = txt (Text.height textHeight) showText
                  |> toForm |> move (0, textPosY)
-    timeTextForm = txt (Text.height timeTextHeight) (show time)
+    timeTextForm = txt (Text.height timeTextHeight) (show timeSum)
                  |> toForm |> move (0, timeTextPosY)
 
   in
@@ -307,7 +332,6 @@ display {state,player,levelsLeft,time} =
       , circle player.r |> make lightGray (player.x, player.y)
       , textForm
       , timeTextForm
-      , time |> asText |> toForm
       ]
 
 txt : (Text -> Text) -> String -> Element
