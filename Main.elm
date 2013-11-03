@@ -213,8 +213,7 @@ stepAlive sysTime _ ({state,player,levelsLeft
                     as game) =
   let
     level = head levelsLeft
-    --crash = not <| player `inLevel` level
-    crash = False
+    crash = not <| player `inLevel` level
     atGoal = last level `includes` player
     lastLevel = length levelsLeft == 1
     levelsLeft' = if | atGoal && not lastLevel -> tail levelsLeft
