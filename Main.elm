@@ -52,13 +52,15 @@ levelsRaw =
 -- view configuration
 
 manualText = "Guide the ball safely to its goal (green)."
-restartText = "Please return to the start (yellow)."
+respawnText = "Please return to the start (yellow)."
+timeTextHeight = 7
+timeTextPosY = 95
 textHeight = 5
-textFormPosY = -90
+textPosY = -90
 
 -- Inputs
 
-type Input = { pos:(Int,Int), size:(Int,Int) }
+type Input = { pos:(Int,Int), size:(Int,Int), clicked:Bool }
 
 touchPosition : Touch.Touch -> (Int,Int)
 touchPosition touch = (touch.x,touch.y)
@@ -73,7 +75,7 @@ firstTouchPosition = keepIf (\tps -> length tps == 1) [(0,0)] touchPositions
 cursor = merge Mouse.position firstTouchPosition
 
 input : Signal Input
-input = (Input <~ cursor ~ Window.dimensions)
+input = (Input <~ cursor ~ Window.dimensions ~ Mouse.isClicked)
 
 type TimestampedInput = Signal (Time, Input)
 timestampedInput : TimestampedInput
@@ -172,8 +174,6 @@ inLevel player level =
     any (\(k1, k2) -> distToSegment (knotToPoint player) (knotToPoint k1) (knotToPoint k2) < k1.r - player.r) knotPairs
 
 -- todo:
--- click to restart
--- points
 -- time (display can be switched off) - use timestamp signal
 -- cutting sharp should not kill you. ;-)
 
@@ -193,7 +193,8 @@ stepAlive : Input -> Game -> Game
 stepAlive _ ({state,player,levelsLeft,time} as game) =
   let
     level = head levelsLeft
-    crash = not <| player `inLevel` level
+    --crash = not <| player `inLevel` level
+    crash = False
     atGoal = last level `includes` player
     lastLevel = length levelsLeft == 1
     levelsLeft' = if | atGoal && not lastLevel -> tail levelsLeft
@@ -216,8 +217,13 @@ stepDead _ ({state,player,levelsLeft} as game) =
     {game | state <- state'}
 
 stepWon : Input -> Game -> Game
-stepWon _ ({state,player,levelsLeft} as game) =
-  game
+stepWon {clicked} ({state,player,levelsLeft} as game) =
+  let
+    (state',levelsLeft') = if | clicked -> (Dead,levels)
+                             | otherwise -> (Won,levelsLeft)
+  in
+    {game | levelsLeft <- levelsLeft',
+            state <- state'}
 
 stepGame : Time -> Input -> Game -> Game
 stepGame sysTime ({pos,size} as input) ({state,player} as game) =
@@ -275,7 +281,7 @@ displayLevel level state =
   in
     group <|
       map (uncurry <| displayLevelLine col) knotPairs
-      --++ map (\(k1,k2) -> circle (k1.r) |> make col (k2.x, k2.y)) knotPairs
+      ++ map (\(k1,k2) -> circle (k1.r) |> make col (k2.x, k2.y)) knotPairs
       ++ [(knotCircle yellow <| head level)]
       ++ [(knotCircle green <| last level)]
 
@@ -283,9 +289,16 @@ display : Game -> Form
 display {state,player,levelsLeft,time} =
   let
     level = head levelsLeft
-    showText = if state == Alive then manualText else restartText
+    showText = case state of
+                 Dead -> respawnText
+                 Won -> "Congratulations! It took you "
+                        ++ (show time) ++ " seconds."
+                        ++ " Click to improve. :)"
+                 _ -> manualText
     textForm = txt (Text.height textHeight) showText
-                 |> toForm |> move (0, textFormPosY)
+                 |> toForm |> move (0, textPosY)
+    timeTextForm = txt (Text.height timeTextHeight) (show time)
+                 |> toForm |> move (0, timeTextPosY)
 
   in
     group
@@ -293,7 +306,7 @@ display {state,player,levelsLeft,time} =
       , displayLevel level state
       , circle player.r |> make lightGray (player.x, player.y)
       , textForm
-      --, round time |> asText |> toForm
+      , timeTextForm
       , time |> asText |> toForm
       ]
 
