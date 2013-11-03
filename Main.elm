@@ -244,13 +244,17 @@ stepDead sysTime _ ({state,player,levelsLeft,lastRespawnTime} as game) =
             lastRespawnTime <- sysTime}
 
 stepWon : Time -> Input -> Game -> Game
-stepWon _ {clicked} ({state,player,levelsLeft} as game) =
+stepWon sysTime {clicked} ({state,player,levelsLeft,timeSum} as game) =
   let
     (state',levelsLeft') = if | clicked -> (Dead,levels)
-                             | otherwise -> (Won,levelsLeft)
+                              | otherwise -> (Won,levelsLeft)
+    timeSum' = if state' == Dead then 0 else timeSum
   in
     {game | levelsLeft <- levelsLeft',
-            state <- state'}
+            state <- state',
+            lastRespawnTime <- sysTime,
+            oldTimeSum <- 0,
+            timeSum <- timeSum'}
 
 stepGame : Time -> Input -> Game -> Game
 stepGame sysTime ({pos,size} as input) ({state,player} as game) =
