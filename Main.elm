@@ -8,7 +8,7 @@ import Window
 
 (gameWidth,gameHeight) = (200,200)
 (halfWidth,halfHeight) = (toFloat gameWidth / 2, toFloat gameHeight / 2)
-playerRadius = 3
+playerRadius = 5
 
 
 type RawLevelKnot = ((Float,Float),Float)
@@ -20,6 +20,11 @@ levelsRaw : [RawLevel]
 levelsRaw =
   [
     [
+      rawLevelKnot -70 -70  4
+    , rawLevelKnot  30  70  4
+    , rawLevelKnot   0 -70  4
+    ]
+  , [
       rawLevelKnot   0 -70  4
     , rawLevelKnot   0   0  3.6
     , rawLevelKnot  50   0  3.0
@@ -54,7 +59,6 @@ textFormPosY = -90
 
 type Input = { pos:(Int,Int), size:(Int,Int) }
 
-
 input : Signal Input
 input = (Input <~ Mouse.position ~ Window.dimensions)
 
@@ -66,7 +70,7 @@ type Sized      a = { a | w:Float, h:Float }
 type Point = Positioned {}
 type Level = [Ball]
 
-data State = Alive | Dead | Won
+data State = Ready | Alive | Dead | Won
 type Ball = Positioned { r:Float }
 type LevelKnot = Ball
 
@@ -86,13 +90,14 @@ generateLevel = scaleLevelWidth . map (uncurry levelKnot)
 levels : [Level]
 levels = map generateLevel levelsRaw
 
-type Game = { state:State, player:Ball, levelsLeft:[Level] }
+type Game = { state:State, player:Ball, levelsLeft:[Level], time:Float }
 
 defaultGame : Game
 defaultGame =
   { state  = Dead,
     player = ball (0,0) playerRadius,
-    levelsLeft = levels }
+    levelsLeft = levels,
+    time = 0 }
 
 
 -- Updates
@@ -152,32 +157,61 @@ inLevel player level =
 -- todo:
 -- click to restart
 -- points
--- time (display can be switched off)
+-- time (display can be switched off) - use timestamp signal
 -- cutting sharp should not kill you. ;-)
 
-stepGame : Input -> Game -> Game
-stepGame {pos,size} ({state,player,levelsLeft} as game) =
+
+stepReady : Input -> Game -> Game
+stepReady _ ({state,player,levelsLeft} as game) =
   let
     level = head levelsLeft
-    (x,y) = winPosToGamePos pos size
-    player' = {player | x <- x,
-                        y <- y}
     atStart = head level `includes` player
+    state' = if | atStart -> Alive
+                | otherwise -> Ready
+  in
+    {game | state <- state',
+            time <- 0 }
+
+stepAlive : Input -> Game -> Game
+stepAlive _ ({state,player,levelsLeft,time} as game) =
+  let
+    level = head levelsLeft
     crash = not <| player `inLevel` level
     atGoal = last level `includes` player
     lastLevel = length levelsLeft == 1
-    levelsLeft' = if | state == Alive && atGoal ->
-                       if lastLevel then levelsLeft else tail levelsLeft
+    levelsLeft' = if | atGoal && not lastLevel -> tail levelsLeft
                      | otherwise -> levelsLeft
-    state' = if | state == Won -> Won
-                | atGoal && lastLevel -> Won
+    state' = if | atGoal && lastLevel -> Won
                 | crash -> Dead
-                | atStart -> Alive
-                | otherwise -> state
+                | otherwise -> Alive
   in
-    {game | player <- player',
-            state <- state',
-            levelsLeft <- levelsLeft'}
+    {game | state <- state',
+            levelsLeft <- levelsLeft' }
+
+stepDead : Input -> Game -> Game
+stepDead _ ({state,player,levelsLeft} as game) =
+  let
+    level = head levelsLeft
+    atStart = head level `includes` player
+    state' = if | atStart -> Alive
+                | otherwise -> Dead
+  in
+    {game | state <- state'}
+
+stepWon : Input -> Game -> Game
+stepWon _ ({state,player,levelsLeft} as game) =
+  game
+
+stepGame : Input -> Game -> Game
+stepGame ({pos,size} as input) ({state,player} as game) =
+  let
+    (x,y) = winPosToGamePos pos size
+    player' = {player | x <- x, y <- y}
+    func = if | state == Alive -> stepAlive
+              | state == Dead -> stepDead
+              | state == Won -> stepWon
+  in
+    func input { game | player <- player' }
 
 gameState : Signal Game
 gameState = foldp stepGame defaultGame input
@@ -214,20 +248,22 @@ displayLevel : Level -> State -> Form
 displayLevel level state =
   let
     col = case state of
-            Alive -> blue
-            Dead -> red
+            --Alive -> blue
+            --Dead -> red
+            Alive -> rgba 0 255 255 0.4
+            Dead -> rgba 255 0 0 0.4
             Won -> green
     knotPairs = pairWise level
     knotCircle col k = circle k.r |> make col (k.x, k.y)
   in
     group <|
       map (uncurry <| displayLevelLine col) knotPairs
-      ++ map (\(k1,k2) -> circle (k1.r) |> make col (k2.x, k2.y)) knotPairs
+      --++ map (\(k1,k2) -> circle (k1.r) |> make col (k2.x, k2.y)) knotPairs
       ++ [(knotCircle yellow <| head level)]
       ++ [(knotCircle green <| last level)]
 
 display : Game -> Form
-display {state,player,levelsLeft} =
+display {state,player,levelsLeft,time} =
   let
     level = head levelsLeft
     showText = if state == Alive then manualText else restartText
@@ -240,7 +276,8 @@ display {state,player,levelsLeft} =
       , displayLevel level state
       , circle player.r |> make lightGray (player.x, player.y)
       , textForm
-      , asText state |> toForm
+      --, round time |> asText |> toForm
+      , time |> asText |> toForm
       ]
 
 txt : (Text -> Text) -> String -> Element
