@@ -21,12 +21,12 @@ levelsRaw : [RawLevel]
 levelsRaw =
   [
     [
-      rawLevelKnot -70 -70  4
+      rawLevelKnot -70 -65  4
     , rawLevelKnot  30  70  3.6
-    , rawLevelKnot   0 -70  2.3
+    , rawLevelKnot   0 -65  2.3
     ]
   , [
-      rawLevelKnot   0 -70  4
+      rawLevelKnot   0 -65  4
     , rawLevelKnot   0   0  3.7
     , rawLevelKnot  50   0  3.3
     , rawLevelKnot  50  40  2.7
@@ -65,7 +65,7 @@ levelsRaw =
 -- view configuration
 
 manualText = "Guide the ball safely to its goal (green)."
-respawnText = "Please return to the start (yellow)."
+respawnText = "Please go to the start (yellow) to begin/respawn."
 timeTextHeight = 7
 timeTextPosY = 95
 textHeight = 5
