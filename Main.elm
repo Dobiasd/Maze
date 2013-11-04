@@ -186,17 +186,48 @@ distToSegmentSquared p v w =
 distToSegment : Point -> Point -> Point -> Float
 distToSegment p v w = sqrt <| distToSegmentSquared p v w
 
+knotToPoint : LevelKnot -> Point
+knotToPoint k = point k.x k.y
+
+-- todo:
+-- cutting sharp should not kill you. ;-)
+inInsideBend : Ball -> (LevelKnot,LevelKnot,LevelKnot) -> Bool
+inInsideBend player (k1,k2,k3) = False
+
+inSegment : Ball -> (LevelKnot,LevelKnot) -> Bool
+inSegment player (k1,k2) = distToSegment
+                               (knotToPoint player)
+                               (knotToPoint k1)
+                               (knotToPoint k2)
+                              < k1.r - player.r
+
+pairWise : [a] -> [(a,a)]
+pairWise xs = case xs of
+                [] -> []
+                _  -> zip xs (tail xs)
+
+zip3 : [a] -> [b] -> [c] -> [(a,b,c)]
+zip3 xs ys zs = case (xs, ys, zs) of
+                  (x::xs', y::ys', z::zs') -> (x,y,z) :: zip3 xs' ys' zs'
+                  otherwise -> []
+
+tripleWise : [a] -> [(a,a,a)]
+tripleWise xs = case xs of
+                  [] -> []
+                  _::[] -> []
+                  _  -> zip3 xs (tail xs) (tail (tail xs))
 
 inLevel : Ball -> Level -> Bool
 inLevel player level =
   let
     knotPairs = pairWise level
+    knotTriples = tripleWise level
     knotToPoint k = point k.x k.y
+    inOneSegment = any (inSegment player) knotPairs
+    bends = pairWise knotPairs
+    inOneBend = any (inInsideBend player) knotTriples
   in
-    any (\(k1, k2) -> distToSegment (knotToPoint player) (knotToPoint k1) (knotToPoint k2) < k1.r - player.r) knotPairs
-
--- todo:
--- cutting sharp should not kill you. ;-)
+    inOneSegment || inOneBend
 
 stepReady : Time -> Input -> Game -> Game
 stepReady _ _ ({state,player,levelsLeft} as game) =
@@ -289,12 +320,6 @@ displayLevelLine col k1 k2 =
     ls = { colStyle | width <- 2 * k1.r }
   in
     p |> traced ls
-
-
-pairWise : [a] -> [(a,a)]
-pairWise xs = case xs of
-                [] -> []
-                _  -> zip xs (tail xs)
 
 noForm : Form
 noForm = rect 0 0 |> filled (rgba 0 0 0 0)
