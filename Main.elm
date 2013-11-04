@@ -83,8 +83,9 @@ touchPositions : Signal [(Int,Int)]
 touchPositions = lift (\touches -> map touchPosition touches) Touch.touches
 
 firstTouchPosition : Signal (Int,Int)
-firstTouchPosition = keepIf (\tps -> length tps == 1) [(0,0)] touchPositions
-                       |> lift (\tps -> head tps)
+firstTouchPosition =
+  let f tps = if length tps == 1 then head tps else (0,0)
+  in lift f touchPositions
 
 cursor = merge Mouse.position firstTouchPosition
 
