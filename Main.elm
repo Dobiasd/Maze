@@ -116,7 +116,7 @@ multiTouch = lift (\touches -> length touches > 1) Touch.touches
 
 {-| Mouse clicks and multi touches count as clicks. -}
 clicked : Signal Bool
-clicked = lift2 (\a b -> a && b) Mouse.isClicked multiTouch
+clicked = lift2 (||) Mouse.isClicked multiTouch
 
 {-| The player and use his mouse or touch screen. -}
 cursor : Signal (Int,Int)
