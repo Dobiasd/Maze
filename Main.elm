@@ -334,11 +334,13 @@ parallelLines p1 p2 dist =
 -- but it touches boths and with their union l1 and l2 cover the ball
 -- completely.
 --
--- Without handling this edge case, a collion would occur when the player is
+-- Without handling this edge case, a collision would occur when the player is
 -- going sharply through the edges on the inside, even though it should not.
 --
--- One overkill version would be to convert the whole level into
--- a big polygon and check if the ball is inside of it.
+-- Version would be to convert the whole level into a big polygon
+-- and check if the ball is inside of it. This would give more flexibility
+-- in the level shape, but since the levels are at the moment
+-- just a bar path, I feel this would be kind of a overkill solution.
 --
 -- Another (even more ugly) version would be to not check the
 -- players ball as a whole, but to interpret it as a list of
@@ -351,7 +353,7 @@ parallelLines p1 p2 dist =
 -- Luckily there is a third possibility. :-)
 -- We have to check if the the following three conditions are fulfilled:
 -- 1) The ball is touching both segments involved in the bend.
---    (If it not even touching both, we are definitely out side the level.)
+--    (If it not even touching both, we are definitely outside the level.)
 -- 2) The ball is inside the triangle provided by the two segments.
 --    (This prevents extension of the space at the outer bend.)
 -- 3) The ball does not touch the point s.
@@ -361,12 +363,12 @@ segments (k1,k2) and (k2,k3)? -}
 inInsideBend : Ball -> (LevelKnot,LevelKnot,LevelKnot) -> Bool
 inInsideBend player (k1,k2,k3) =
   let
-    (l121, l122) = parallelLines k1 k2 k1.r -- borders of the first segment
-    (l231, l232) = parallelLines k2 k3 k2.r -- borders of the second
-    s1 = intersectLineLine l121 l231 -- the four possible intersections
-    s2 = intersectLineLine l122 l231 -- of the two line pairs above.
-    s3 = intersectLineLine l121 l232
-    s4 = intersectLineLine l122 l232
+    (b1A, b1B) = parallelLines k1 k2 k1.r -- borders of the first segment
+    (b2A, b2B) = parallelLines k2 k3 k2.r -- borders of the second
+    s1 = intersectLineLine b1A b2A -- the four possible intersections
+    s2 = intersectLineLine b1B b2A -- of the two line pairs above.
+    s3 = intersectLineLine b1A b2B
+    s4 = intersectLineLine b1B b2B
     touchingSegment1 = touchingSegment player (k1,k2)
     touchingSegment2 = touchingSegment player (k2,k3)
     touchingBothSegments = touchingSegment1 && touchingSegment2
