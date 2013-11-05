@@ -337,8 +337,19 @@ parallelLines p1 p2 dist =
 -- Without handling this edge case, a collion would occur when the player is
 -- going sharply through the edges on the inside, even though it should not.
 --
--- To avoid this we check if the the following three conditions
--- are fulfilled:
+-- One overkill version would be to convert the whole level into
+-- a big polygon and check if the ball is inside of it.
+--
+-- Another (even more ugly) version would be to not check the
+-- players ball as a whole, but to interpret it as a list of
+-- many (m) of its surface points, and check if they all are inside one
+-- of the (n) level segments. This would of course work and not be too
+-- complicated to implement, but it would lift the algorithm
+-- into a higher complexity class (O(n) -> O(n*m)), so I did not want to
+-- use this solution either.
+--
+-- Luckily there is a third possibility. :-)
+-- We have to check if the the following three conditions are fulfilled:
 -- 1) The ball is touching both segments involved in the bend.
 --    (If it not even touching both, we are definitely out side the level.)
 -- 2) The ball is inside the triangle provided by the two segments.
@@ -534,7 +545,7 @@ display {state,player,levelsLeft,timeSum} =
     level = head levelsLeft
     showText = case state of
                  Dead -> respawnText
-                 Won -> "Yeah! " ++ (show timeSum) ++ " seconds."
+                 Won -> "Yeah! Just " ++ (show timeSum) ++ " seconds."
                         ++ " Click (or multi touch) to improve. :)"
                  _ -> manualText
     textForm = txt (Text.height textHeight) showText
