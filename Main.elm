@@ -408,14 +408,14 @@ pairWise xs = case xs of
 zip3 : [a] -> [b] -> [c] -> [(a,b,c)]
 zip3 xs ys zs = case (xs, ys, zs) of
                   (x::xs', y::ys', z::zs') -> (x,y,z) :: zip3 xs' ys' zs'
-                  otherwise -> []
+                  (  _   ,   _   ,   _   ) -> []
 
 {-| [1,2,3,4,5] -> [(1,2,3),(2,3,4),(3,4,5)] -}
 tripleWise : [a] -> [(a,a,a)]
 tripleWise xs = case xs of
-                  [] -> []
+                  []    -> []
                   _::[] -> []
-                  _  -> zip3 xs (tail xs) (tail (tail xs))
+                  _     -> zip3 xs (tail xs) (tail (tail xs))
 
 {-| Is the player inside the level or did a crash occur? -}
 inLevel : Ball -> Level -> Bool
