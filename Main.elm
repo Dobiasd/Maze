@@ -90,6 +90,9 @@ timeTextHeight = 7
 timeTextPosY = 95
 textHeight = 5
 textPosY = -90
+aliveColor = rgba   0 255 255 0.4
+deadColor  = rgba 255   0   0 0.4
+wonColor   = rgba   0 255   0 0.4
 
 
 -- /--------\
@@ -523,9 +526,9 @@ displayLevel : Level -> State -> Form
 displayLevel level state =
   let
     col = case state of
-            Alive -> rgba   0 255 255 0.4
-            Dead  -> rgba 255   0   0 0.4
-            Won   -> rgba   0 255   0 0.4
+            Alive -> aliveColor
+            Dead  -> deadColor
+            Won   -> wonColor
     knotPairs = pairWise level
     knotCircle col k = circle k.r |> make col (k.x, k.y)
   in
