@@ -15,6 +15,7 @@ import Mouse
 import Touch
 import Window
 
+
 -- /---------------------\
 -- | model configuration |
 -- \---------------------/
@@ -182,13 +183,12 @@ type Game = { state:State
 -- When was the last time the player was dead and then entered the start.
             , lastRespawnTime:Float
 
--- The sum of all past time spans (respawn to crash) without the current
+-- The sum of all past time spans (respawn to crash) without the current.
             , oldTimeSum:Float
 
 -- The time including all past time spans and the currently running.
 -- It is recalculated at every update and only used for the display.
             , timeSum:Float }
-
 
 defaultGame : Game
 defaultGame =
@@ -428,10 +428,6 @@ inLevel player level =
   in
     completelyInOneSegment || inABend
 
-
-gameState : Signal Game
-gameState = foldp (uncurry stepGame) defaultGame timestampedInput
-
 {-| Update player position and
 dispatch according to the current game state. -}
 stepGame : Time -> Input -> Game -> Game
@@ -498,14 +494,20 @@ stepWon sysTime {clicked} ({state,player,levelsLeft,timeSum} as game) =
             oldTimeSum <- 0,
             timeSum <- timeSum'}
 
+gameState : Signal Game
+gameState = foldp (uncurry stepGame) defaultGame timestampedInput
 
 -- /---------\
 -- | display |
 -- \---------/
 
-{-| Take a shape, give it a color and move it.. -}
+{-| Take a shape, give it a color and move it. -}
 make : Color -> (Float, Float) -> Shape -> Form
 make color (x,y) shape = shape |> filled color |> move (x,y)
+
+{-| Render text using a given transformation function. -}
+txt : (Text -> Text) -> String -> Element
+txt f = text . f . monospace . Text.color lightBlue . toText
 
 {-| Convert level knots to a displayable path. -}
 levelKnotsToPath : LevelKnot -> LevelKnot -> Path
@@ -538,10 +540,6 @@ displayLevel level state =
       ++ map (\(k1,k2) -> circle (k1.r) |> make col (k2.x, k2.y)) knotPairs
       ++ [(knotCircle yellow <| head level)] -- start
       ++ [(knotCircle green <| last level)] -- goal
-
-{-| Render text using a given transformation function. -}
-txt : (Text -> Text) -> String -> Element
-txt f = text . f . monospace . Text.color lightBlue . toText
 
 {-| Draw game into a form with size (gameWidth,gameHeight). -}
 display : Game -> Form
