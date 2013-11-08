@@ -122,9 +122,12 @@ multiTouch = lift (\touches -> length touches > 1) Touch.touches
 clicked : Signal Bool
 clicked = lift2 (||) Mouse.isClicked multiTouch
 
+-- Limit the maximum input frequency to 60 fps
+-- to avoid stuttering with very high mouse poll rates.
 {-| The player and use his mouse or touch screen. -}
 cursor : Signal (Int,Int)
-cursor = merge Mouse.position firstTouchPosition
+cursor = merge Mouse.position firstTouchPosition |>
+           sampleOn (fps 60) |> dropRepeats
 
 {-| We want the time to update every 100 milliseconds if possible. -}
 ticker = lift (\t -> t / 1000) <| fps 10
