@@ -553,7 +553,7 @@ display {state,player,levelsLeft,timeSum} =
     textForm = txt (Text.height textHeight) showText
                  |> toForm |> move (0, textPosY)
     timeTextForm = txt (Text.height timeTextHeight) (show timeSum)
-                 |> toForm |> move (0, timeTextPosY)
+                   |> toForm |> move (0, timeTextPosY)
 
   in
     group
