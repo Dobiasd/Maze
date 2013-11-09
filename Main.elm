@@ -15,6 +15,7 @@ import Mouse
 import Touch
 import Window
 
+
 -- /---------------------\
 -- | model configuration |
 -- \---------------------/
@@ -90,6 +91,9 @@ timeTextHeight = 7
 timeTextPosY = 95
 textHeight = 5
 textPosY = -90
+aliveColor = rgba   0 255 255 0.4
+deadColor  = rgba 255   0   0 0.4
+wonColor   = rgba   0 255   0 0.4
 
 
 -- /--------\
@@ -118,9 +122,12 @@ multiTouch = lift (\touches -> length touches > 1) Touch.touches
 clicked : Signal Bool
 clicked = lift2 (||) Mouse.isClicked multiTouch
 
+-- Limit the maximum input frequency to 60 fps
+-- to avoid stuttering with very high mouse poll rates.
 {-| The player and use his mouse or touch screen. -}
 cursor : Signal (Int,Int)
-cursor = merge Mouse.position firstTouchPosition
+cursor = merge Mouse.position firstTouchPosition |>
+           sampleOn (fps 60) |> dropRepeats
 
 {-| We want the time to update every 100 milliseconds if possible. -}
 ticker = lift (\t -> t / 1000) <| fps 10
@@ -179,13 +186,12 @@ type Game = { state:State
 -- When was the last time the player was dead and then entered the start.
             , lastRespawnTime:Float
 
--- The sum of all past time spans (respawn to crash) without the current
+-- The sum of all past time spans (respawn to crash) without the current.
             , oldTimeSum:Float
 
 -- The time including all past time spans and the currently running.
 -- It is recalculated at every update and only used for the display.
             , timeSum:Float }
-
 
 defaultGame : Game
 defaultGame =
@@ -405,14 +411,14 @@ pairWise xs = case xs of
 zip3 : [a] -> [b] -> [c] -> [(a,b,c)]
 zip3 xs ys zs = case (xs, ys, zs) of
                   (x::xs', y::ys', z::zs') -> (x,y,z) :: zip3 xs' ys' zs'
-                  otherwise -> []
+                  (  _   ,   _   ,   _   ) -> []
 
 {-| [1,2,3,4,5] -> [(1,2,3),(2,3,4),(3,4,5)] -}
 tripleWise : [a] -> [(a,a,a)]
 tripleWise xs = case xs of
-                  [] -> []
+                  []    -> []
                   _::[] -> []
-                  _  -> zip3 xs (tail xs) (tail (tail xs))
+                  _     -> zip3 xs (tail xs) (tail (tail xs))
 
 {-| Is the player inside the level or did a crash occur? -}
 inLevel : Ball -> Level -> Bool
@@ -424,10 +430,6 @@ inLevel player level =
     inABend = any (inInsideBend player) knotTriples
   in
     completelyInOneSegment || inABend
-
-
-gameState : Signal Game
-gameState = foldp (uncurry stepGame) defaultGame timestampedInput
 
 {-| Update player position and
 dispatch according to the current game state. -}
@@ -495,14 +497,20 @@ stepWon sysTime {clicked} ({state,player,levelsLeft,timeSum} as game) =
             oldTimeSum <- 0,
             timeSum <- timeSum'}
 
+gameState : Signal Game
+gameState = foldp (uncurry stepGame) defaultGame timestampedInput
 
 -- /---------\
 -- | display |
 -- \---------/
 
-{-| Take a shape, give it a color and move it.. -}
+{-| Take a shape, give it a color and move it. -}
 make : Color -> (Float, Float) -> Shape -> Form
 make color (x,y) shape = shape |> filled color |> move (x,y)
+
+{-| Render text using a given transformation function. -}
+txt : (Text -> Text) -> String -> Element
+txt f = text . f . monospace . Text.color lightBlue . toText
 
 {-| Convert level knots to a displayable path. -}
 levelKnotsToPath : LevelKnot -> LevelKnot -> Path
@@ -523,9 +531,9 @@ displayLevel : Level -> State -> Form
 displayLevel level state =
   let
     col = case state of
-            Alive -> rgba   0 255 255 0.4
-            Dead  -> rgba 255   0   0 0.4
-            Won   -> rgba   0 255   0 0.4
+            Alive -> aliveColor
+            Dead  -> deadColor
+            Won   -> wonColor
     knotPairs = pairWise level
     knotCircle col k = circle k.r |> make col (k.x, k.y)
   in
@@ -535,10 +543,6 @@ displayLevel level state =
       ++ map (\(k1,k2) -> circle (k1.r) |> make col (k2.x, k2.y)) knotPairs
       ++ [(knotCircle yellow <| head level)] -- start
       ++ [(knotCircle green <| last level)] -- goal
-
-{-| Render text using a given transformation function. -}
-txt : (Text -> Text) -> String -> Element
-txt f = text . f . monospace . Text.color lightBlue . toText
 
 {-| Draw game into a form with size (gameWidth,gameHeight). -}
 display : Game -> Form
