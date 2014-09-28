@@ -11,7 +11,9 @@ After finishing the last level, the summed up time inversly
 indicates the players performance. ;-)
 -}
 
+import List
 import Mouse
+import Text
 import Touch
 import Window
 
@@ -116,7 +118,7 @@ multiTouch = lift (\touches -> length touches > 1) Touch.touches
 
 {-| Mouse clicks and multi touches count as clicks. -}
 clicked : Signal Bool
-clicked = lift2 (||) Mouse.isClicked multiTouch
+clicked = lift2 (||) Mouse.isDown multiTouch
 
 {-| The player and use his mouse or touch screen. -}
 cursor : Signal (Int,Int)
@@ -372,7 +374,8 @@ inInsideBend player (k1,k2,k3) =
     touchingSegment1 = touchingSegment player (k1,k2)
     touchingSegment2 = touchingSegment player (k2,k3)
     touchingBothSegments = touchingSegment1 && touchingSegment2
-    ss = justs [s1,s2,s3,s4] -- extract the possible intersections
+    -- extract the possible intersections
+    ss = List.filterMap identity [s1,s2,s3,s4]
     triangle = (k1,k2,k3) -- the triangle spanned by the two segments
     -- Since the following line is only evaluated if there is at least
     -- one element in ss, the function as a whole is still total.
@@ -461,7 +464,7 @@ stepAlive sysTime _ ({state,player,levelsLeft
       if | state' == Dead -> (oldTimeSum + sysTime - lastRespawnTime, sysTime)
          | otherwise -> (oldTimeSum, lastRespawnTime)
     timeSumPrec = oldTimeSum' + sysTime - lastRespawnTime'
-    timeSum' = (toFloat . round) (timeSumPrec / 100) / 10
+    timeSum' = (round >> toFloat) (timeSumPrec / 100) / 10
   in
     {game | state <- state',
             levelsLeft <- levelsLeft',
@@ -538,7 +541,7 @@ displayLevel level state =
 
 {-| Render text using a given transformation function. -}
 txt : (Text -> Text) -> String -> Element
-txt f = text . f . monospace . Text.color lightBlue . toText
+txt f = toText >> Text.color lightBlue >> monospace >> f >> leftAligned
 
 {-| Draw game into a form with size (gameWidth,gameHeight). -}
 display : Game -> Form
