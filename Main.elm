@@ -11,9 +11,17 @@ After finishing the last level, the summed up time inversly
 indicates the players performance. ;-)
 -}
 
+import Color(Color, rgba, yellow, green, lightBlue, darkBlue, lightGray)
+import Graphics.Collage(move, filled, Shape, Form, path, Path, solid, traced
+  , circle, group, toForm, rect, collage, scale)
+import Graphics.Element(Element)
+import List((::))
 import List
 import Mouse
+import Signal((<~),(~))
+import Signal
 import Text
+import Time
 import Touch
 import Window
 
@@ -37,7 +45,7 @@ following this know in the level path. -}
 between two consecutive levels, the levels should be designed such
 that the last point (l) of level n equals the first point (f) of level n+1.
 radius of f <= radius f. -}
-levels : [Level]
+levels : List Level
 levels =
   [
     [
@@ -103,29 +111,30 @@ touchPosition : Touch.Touch -> (Int,Int)
 touchPosition touch = (touch.x,touch.y)
 
 {-| Extract all the latest touch positions. -}
-touchPositions : Signal [(Int,Int)]
-touchPositions = lift (\touches -> map touchPosition touches) Touch.touches
+touchPositions : Signal.Signal (List (Int,Int))
+touchPositions =
+  Signal.map (\touches -> List.map touchPosition touches) Touch.touches
 
 {-| If exactly one touch is present, use its coordinates. (0,0) otherwise. -}
-firstTouchPosition : Signal (Int,Int)
+firstTouchPosition : Signal.Signal (Int,Int)
 firstTouchPosition =
-  let f tps = if length tps == 1 then head tps else (0,0)
-  in lift f touchPositions
+  let f tps = if List.length tps == 1 then List.head tps else (0,0)
+  in Signal.map f touchPositions
 
 {-| If the user touching two positions at once? -}
-multiTouch : Signal Bool
-multiTouch = lift (\touches -> length touches > 1) Touch.touches
+multiTouch : Signal.Signal Bool
+multiTouch = Signal.map (\touches -> List.length touches > 1) Touch.touches
 
 {-| Mouse clicks and multi touches count as clicks. -}
-clicked : Signal Bool
-clicked = lift2 (||) Mouse.isDown multiTouch
+clicked : Signal.Signal Bool
+clicked = Signal.map2 (||) Mouse.isDown multiTouch
 
 {-| The player and use his mouse or touch screen. -}
-cursor : Signal (Int,Int)
-cursor = merge Mouse.position firstTouchPosition
+cursor : Signal.Signal (Int,Int)
+cursor = Signal.merge Mouse.position firstTouchPosition
 
 {-| We want the time to update every 100 milliseconds if possible. -}
-ticker = lift (\t -> t / 1000) <| fps 10
+ticker = Signal.map (\t -> t / 1000) <| Time.fps 10
 
 {-| Relevant things that can change are:
 - the position of the player on the screen
@@ -133,30 +142,30 @@ ticker = lift (\t -> t / 1000) <| fps 10
 - did the user click?
 - did the time tick?
 The value of delta is not used. It is just needed to trigger an update. -}
-type Input = { pos:(Int,Int), size:(Int,Int), clicked:Bool, delta:Float }
+type alias Input = { pos:(Int,Int), size:(Int,Int), clicked:Bool, delta:Float }
 
-input : Signal Input
+input : Signal.Signal Input
 input = (Input <~ cursor ~ Window.dimensions ~ clicked ~ ticker)
 
 {-| Every input gets a timestamp, so our performance stop watch
 can work with maximum precision. -}
-type TimestampedInput = Signal (Time, Input)
+type alias TimestampedInput = Signal.Signal (Time.Time, Input)
 timestampedInput : TimestampedInput
-timestampedInput = timestamp input
+timestampedInput = Time.timestamp input
 
 
 -- /-------\
 -- | model |
 -- \-------/
 
-type Positioned a = { a | x:Float, y:Float }
-type Point = Positioned {}
-type Line = (Point,Point)
-type Level = [Ball]
+type alias Positioned a = { a | x:Float, y:Float }
+type alias Point = Positioned {}
+type alias Line = (Point,Point)
+type alias Level = List Ball
 
-data State = Alive | Dead | Won
-type Ball = Positioned { r:Float }
-type LevelKnot = Ball
+type State = Alive | Dead | Won
+type alias Ball = Positioned { r:Float }
+type alias LevelKnot = Ball
 
 point : Float -> Float -> Point
 point x y = {x=x, y=y}
@@ -170,13 +179,13 @@ ball (x,y) r = {x=x, y=y, r=r }
 levelKnot : Float -> Float -> Float -> LevelKnot
 levelKnot x y r = {x=x, y=y, r=r*playerRadius }
 
-type Game = { state:State
-            , player:Ball
+type alias Game = { state:State
+                  , player:Ball
 
 -- Contains the levels yet to be finished by the player.
 -- If the last level is solved, it will remain here,
 -- so this list will never get empty.
-            , levelsLeft:[Level]
+            , levelsLeft: List Level
 
 -- When was the last time the player was dead and then entered the start.
             , lastRespawnTime:Float
@@ -379,10 +388,10 @@ inInsideBend player (k1,k2,k3) =
     triangle = (k1,k2,k3) -- the triangle spanned by the two segments
     -- Since the following line is only evaluated if there is at least
     -- one element in ss, the function as a whole is still total.
-    s = filter (inTriangle triangle) ss |> head
+    s = List.filter (inTriangle triangle) ss |> List.head
     touchingS = dist {x = s.x - player.x, y = s.y - player.y} < player.r
   in
-    if isEmpty ss then False else
+    if List.isEmpty ss then False else
       touchingBothSegments && inTriangle triangle player && not touchingS
 
 {-| Point inside triangle? -}
@@ -399,23 +408,23 @@ inTriangle (v1,v2,v3) pt =
     (b1 == b2) && (b2 == b3)
 
 {-| [1,2,3,4] -> [(1,2),(2,3),(3,4)] -}
-pairWise : [a] -> [(a,a)]
+pairWise : List a -> List (a,a)
 pairWise xs = case xs of
                 [] -> []
-                _  -> zip xs (tail xs)
+                _  -> List.map2 (,) xs (List.tail xs)
 
 {-| [a,b] [1,2] [x,y] -> [(a,1,x),(b,2,y)] -}
-zip3 : [a] -> [b] -> [c] -> [(a,b,c)]
+zip3 : List a -> List b -> List c -> List (a,b,c)
 zip3 xs ys zs = case (xs, ys, zs) of
                   (x::xs', y::ys', z::zs') -> (x,y,z) :: zip3 xs' ys' zs'
                   otherwise -> []
 
 {-| [1,2,3,4,5] -> [(1,2,3),(2,3,4),(3,4,5)] -}
-tripleWise : [a] -> [(a,a,a)]
+tripleWise : List a -> List (a,a,a)
 tripleWise xs = case xs of
                   [] -> []
                   _::[] -> []
-                  _  -> zip3 xs (tail xs) (tail (tail xs))
+                  _  -> zip3 xs (List.tail xs) (List.tail (List.tail xs))
 
 {-| Is the player inside the level or did a crash occur? -}
 inLevel : Ball -> Level -> Bool
@@ -423,18 +432,18 @@ inLevel player level =
   let
     knotPairs = pairWise level -- the segments
     knotTriples = tripleWise level -- the links of two adjecent segments
-    completelyInOneSegment = any (inSegment player) knotPairs
-    inABend = any (inInsideBend player) knotTriples
+    completelyInOneSegment = List.any (inSegment player) knotPairs
+    inABend = List.any (inInsideBend player) knotTriples
   in
     completelyInOneSegment || inABend
 
 
-gameState : Signal Game
-gameState = foldp (uncurry stepGame) defaultGame timestampedInput
+gameState : Signal.Signal Game
+gameState = Signal.foldp (uncurry stepGame) defaultGame timestampedInput
 
 {-| Update player position and
 dispatch according to the current game state. -}
-stepGame : Time -> Input -> Game -> Game
+stepGame : Time.Time -> Input -> Game -> Game
 stepGame sysTime ({pos,size} as input) ({state,player} as game) =
   let
     (x,y) = winPosToGamePos pos size
@@ -445,17 +454,20 @@ stepGame sysTime ({pos,size} as input) ({state,player} as game) =
   in
     func sysTime input { game | player <- player' }
 
+last : List a -> a
+last = List.reverse >> List.head
+
 {-| Step game when player is alive. -}
-stepAlive : Time -> Input -> Game -> Game
+stepAlive : Time.Time -> Input -> Game -> Game
 stepAlive sysTime _ ({state,player,levelsLeft
                     ,lastRespawnTime,oldTimeSum,timeSum}
                     as game) =
   let
-    level = head levelsLeft
+    level = List.head levelsLeft
     crash = not <| player `inLevel` level
     atGoal = last level `includes` player
-    lastLevel = length levelsLeft == 1
-    levelsLeft' = if | atGoal && not lastLevel -> tail levelsLeft
+    lastLevel = List.length levelsLeft == 1
+    levelsLeft' = if | atGoal && not lastLevel -> List.tail levelsLeft
                      | otherwise -> levelsLeft
     state' = if | atGoal && lastLevel -> Won
                 | crash -> Dead
@@ -473,11 +485,11 @@ stepAlive sysTime _ ({state,player,levelsLeft
             timeSum <- timeSum' }
 
 {-| Step game when player is dead. -}
-stepDead : Time -> Input -> Game -> Game
+stepDead : Time.Time -> Input -> Game -> Game
 stepDead sysTime _ ({state,player,levelsLeft,lastRespawnTime} as game) =
   let
-    level = head levelsLeft
-    atStart = head level `includes` player
+    level = List.head levelsLeft
+    atStart = List.head level `includes` player
     state' = if | atStart -> Alive
                 | otherwise -> Dead
   in
@@ -485,7 +497,7 @@ stepDead sysTime _ ({state,player,levelsLeft,lastRespawnTime} as game) =
             lastRespawnTime <- sysTime}
 
 {-| Step game when the game is finished. -}
-stepWon : Time -> Input -> Game -> Game
+stepWon : Time.Time -> Input -> Game -> Game
 stepWon sysTime {clicked} ({state,player,levelsLeft,timeSum} as game) =
   let
     (state',levelsLeft') = if | clicked -> (Dead,levels)
@@ -533,29 +545,35 @@ displayLevel level state =
     knotCircle col k = circle k.r |> make col (k.x, k.y)
   in
     group <|
-      map (uncurry <| displayLevelLine col False) knotPairs -- wide beams
-      ++ map (uncurry <| displayLevelLine col True) knotPairs -- beams centers
-      ++ map (\(k1,k2) -> circle (k1.r) |> make col (k2.x, k2.y)) knotPairs
-      ++ [(knotCircle yellow <| head level)] -- start
+      List.map (uncurry <| displayLevelLine col False) knotPairs -- wide beams
+      ++ List.map (uncurry
+         <| displayLevelLine col True) knotPairs -- beams centers
+      ++ List.map (\(k1,k2) -> circle (k1.r)
+         |> make col (k2.x, k2.y)) knotPairs
+      ++ [(knotCircle yellow <| List.head level)] -- start
       ++ [(knotCircle green <| last level)] -- goal
 
 {-| Render text using a given transformation function. -}
-txt : (Text -> Text) -> String -> Element
-txt f = toText >> Text.color lightBlue >> monospace >> f >> leftAligned
+txt : (Text.Text -> Text.Text) -> String -> Element
+txt f = Text.fromString
+        >> Text.color lightBlue
+        >> Text.monospace
+        >> f
+        >> Text.leftAligned
 
 {-| Draw game into a form with size (gameWidth,gameHeight). -}
 display : Game -> Form
 display {state,player,levelsLeft,timeSum} =
   let
-    level = head levelsLeft
+    level = List.head levelsLeft
     showText = case state of
                  Dead -> respawnText
-                 Won -> "Yeah! Just " ++ (show timeSum) ++ " seconds."
+                 Won -> "Yeah! Just " ++ (toString timeSum) ++ " seconds."
                         ++ " Click (or multi touch) to improve. :)"
                  _ -> manualText
     textForm = txt (Text.height textHeight) showText
                  |> toForm |> move (0, textPosY)
-    timeTextForm = txt (Text.height timeTextHeight) (show timeSum)
+    timeTextForm = txt (Text.height timeTextHeight) (toString timeSum)
                      |> toForm |> move (0, timeTextPosY)
 
   in
@@ -575,4 +593,5 @@ displayFullScreen (w,h) game =
   in
     collage w h [ display game |> scale factor ]
 
-main = lift2 displayFullScreen Window.dimensions <| dropRepeats gameState
+main = Signal.map2 displayFullScreen Window.dimensions
+       <| Signal.dropRepeats gameState
