@@ -1,0 +1,13 @@
+{
+    "version": "1.0.0",
+    "summary": "Test your mouse precision skills with this simple maze game.",
+    "repository": "https://github.com/Dobiasd/Maze.git",
+    "license": "MIT",
+    "source-directories": [
+        "."
+    ],
+    "exposed-modules": [],
+    "dependencies": {
+        "elm-lang/core": "1.0.0 <= v < 2.0.0"
+    }
+}
