@@ -11,14 +11,16 @@ After finishing the last level, the summed up time inversly
 indicates the players performance. ;-)
 -}
 
-import Color(Color, rgba, yellow, green, lightBlue, darkBlue, lightGray)
-import Graphics.Collage(move, filled, Shape, Form, path, Path, solid, traced
-  , circle, group, toForm, rect, collage, scale)
-import Graphics.Element(Element)
-import List((::))
+import Color exposing (Color, rgba, yellow, green, lightBlue, darkBlue
+  , lightGray)
+import Debug
+import Graphics.Collage exposing (move, filled, Shape, Form, path, Path
+  , solid, traced, circle, group, toForm, rect, collage, scale)
+import Graphics.Element exposing (Element, leftAligned)
+import List exposing ((::))
 import List
 import Mouse
-import Signal((<~),(~))
+import Signal exposing ((<~),(~))
 import Signal
 import Text
 import Time
@@ -118,7 +120,7 @@ touchPositions =
 {-| If exactly one touch is present, use its coordinates. (0,0) otherwise. -}
 firstTouchPosition : Signal.Signal (Int,Int)
 firstTouchPosition =
-  let f tps = if List.length tps == 1 then List.head tps else (0,0)
+  let f tps = if List.length tps == 1 then unsafeHead tps else (0,0)
   in Signal.map f touchPositions
 
 {-| If the user touching two positions at once? -}
@@ -388,7 +390,7 @@ inInsideBend player (k1,k2,k3) =
     triangle = (k1,k2,k3) -- the triangle spanned by the two segments
     -- Since the following line is only evaluated if there is at least
     -- one element in ss, the function as a whole is still total.
-    s = List.filter (inTriangle triangle) ss |> List.head
+    s = List.filter (inTriangle triangle) ss |> unsafeHead
     touchingS = dist {x = s.x - player.x, y = s.y - player.y} < player.r
   in
     if List.isEmpty ss then False else
@@ -411,7 +413,7 @@ inTriangle (v1,v2,v3) pt =
 pairWise : List a -> List (a,a)
 pairWise xs = case xs of
                 [] -> []
-                _  -> List.map2 (,) xs (List.tail xs)
+                _  -> List.map2 (,) xs (unsafeTail xs)
 
 {-| [a,b] [1,2] [x,y] -> [(a,1,x),(b,2,y)] -}
 zip3 : List a -> List b -> List c -> List (a,b,c)
@@ -424,7 +426,7 @@ tripleWise : List a -> List (a,a,a)
 tripleWise xs = case xs of
                   [] -> []
                   _::[] -> []
-                  _  -> zip3 xs (List.tail xs) (List.tail (List.tail xs))
+                  _  -> zip3 xs (unsafeTail xs) (unsafeTail (unsafeTail xs))
 
 {-| Is the player inside the level or did a crash occur? -}
 inLevel : Ball -> Level -> Bool
@@ -454,8 +456,18 @@ stepGame sysTime ({pos,size} as input) ({state,player} as game) =
   in
     func sysTime input { game | player <- player' }
 
+unsafeHead : List a -> a
+unsafeHead xs = case xs of
+  (x::_) -> x
+  _ -> Debug.crash "unsafeHead with empty list"
+
+unsafeTail : List a -> List a
+unsafeTail xs = case xs of
+  (_::ys) -> ys
+  _ -> Debug.crash "unsafeTail with empty list"
+
 last : List a -> a
-last = List.reverse >> List.head
+last = List.reverse >> unsafeHead
 
 {-| Step game when player is alive. -}
 stepAlive : Time.Time -> Input -> Game -> Game
@@ -463,11 +475,11 @@ stepAlive sysTime _ ({state,player,levelsLeft
                     ,lastRespawnTime,oldTimeSum,timeSum}
                     as game) =
   let
-    level = List.head levelsLeft
+    level = unsafeHead levelsLeft
     crash = not <| player `inLevel` level
     atGoal = last level `includes` player
     lastLevel = List.length levelsLeft == 1
-    levelsLeft' = if | atGoal && not lastLevel -> List.tail levelsLeft
+    levelsLeft' = if | atGoal && not lastLevel -> unsafeTail levelsLeft
                      | otherwise -> levelsLeft
     state' = if | atGoal && lastLevel -> Won
                 | crash -> Dead
@@ -488,8 +500,8 @@ stepAlive sysTime _ ({state,player,levelsLeft
 stepDead : Time.Time -> Input -> Game -> Game
 stepDead sysTime _ ({state,player,levelsLeft,lastRespawnTime} as game) =
   let
-    level = List.head levelsLeft
-    atStart = List.head level `includes` player
+    level = unsafeHead levelsLeft
+    atStart = unsafeHead level `includes` player
     state' = if | atStart -> Alive
                 | otherwise -> Dead
   in
@@ -550,7 +562,7 @@ displayLevel level state =
          <| displayLevelLine col True) knotPairs -- beams centers
       ++ List.map (\(k1,k2) -> circle (k1.r)
          |> make col (k2.x, k2.y)) knotPairs
-      ++ [(knotCircle yellow <| List.head level)] -- start
+      ++ [(knotCircle yellow <| unsafeHead level)] -- start
       ++ [(knotCircle green <| last level)] -- goal
 
 {-| Render text using a given transformation function. -}
@@ -559,13 +571,13 @@ txt f = Text.fromString
         >> Text.color lightBlue
         >> Text.monospace
         >> f
-        >> Text.leftAligned
+        >> leftAligned
 
 {-| Draw game into a form with size (gameWidth,gameHeight). -}
 display : Game -> Form
 display {state,player,levelsLeft,timeSum} =
   let
-    level = List.head levelsLeft
+    level = unsafeHead levelsLeft
     showText = case state of
                  Dead -> respawnText
                  Won -> "Yeah! Just " ++ (toString timeSum) ++ " seconds."
