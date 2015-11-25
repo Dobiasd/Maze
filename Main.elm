@@ -20,7 +20,6 @@ import Graphics.Element exposing (Element, leftAligned)
 import List exposing ((::))
 import List
 import Mouse
-import Signal exposing ((<~),(~))
 import Signal
 import Text
 import Time
@@ -147,7 +146,7 @@ The value of delta is not used. It is just needed to trigger an update. -}
 type alias Input = { pos:(Int,Int), size:(Int,Int), clicked:Bool, delta:Float }
 
 input : Signal.Signal Input
-input = (Input <~ cursor ~ Window.dimensions ~ clicked ~ ticker)
+input = Signal.map4 Input cursor Window.dimensions clicked ticker
 
 {-| Every input gets a timestamp, so our performance stop watch
 can work with maximum precision. -}
@@ -264,10 +263,10 @@ distToSegmentSquared p v w =
     -- Projection falls on the segment
     nearestP = point (v.x + t * (w.x - v.x)) (v.y + t * (w.y - v.y))
   in
-    if | l2 == 0 -> dist2 p v -- v == w case
-       | t < 0 -> dist2 p v -- Beyond the 'v' end of the segment
-       | t > 1 -> dist2 p w -- Beyond the 'w' end of the segment
-       | otherwise -> dist2 p nearestP
+    if l2 == 0 then dist2 p v -- v == w case
+    else if t < 0 then dist2 p v -- Beyond the 'v' end of the segment
+    else if t > 1 then dist2 p w -- Beyond the 'w' end of the segment
+    else dist2 p nearestP
 
 {-| Minimum distance between line segment vw and point p. -}
 distToSegment : Positioned a -> Positioned b -> Positioned c -> Float
@@ -307,17 +306,17 @@ diffVec v1 v2 = point (v2.x - v1.x) (v2.y - v1.y)
 
 {-| Vector addition. -}
 movePoint : Positioned a -> Point -> Positioned a
-movePoint p v = {p | x <- p.x + v.x, y <- p.y + v.y}
+movePoint p v = {p | x = p.x + v.x, y = p.y + v.y}
 
 {-| Scale vector. -}
 scaleVec : Float -> Positioned a -> Positioned a
-scaleVec s v = {v | x <- v.x * s, y <- v.y * s}
+scaleVec s v = {v | x = v.x * s, y = v.y * s}
 
 {-| Normalize vector to lenght 1. -}
 normVec : Positioned a -> Positioned a
 normVec v =
   let l = dist v
-  in {v | x <- v.x / l, y <- v.y / l}
+  in {v | x = v.x / l, y = v.y / l}
 
 {-| Return the two possible perpendicular vectors of v. -}
 perpendiculars : Point -> (Point, Point)
@@ -449,12 +448,13 @@ stepGame : Time.Time -> Input -> Game -> Game
 stepGame sysTime ({pos,size} as input) ({state,player} as game) =
   let
     (x,y) = winPosToGamePos pos size
-    player' = {player | x <- x, y <- y}
-    func = if | state == Alive -> stepAlive
-              | state == Dead -> stepDead
-              | state == Won -> stepWon
+    player' = {player | x = x, y = y}
+    func = if state == Alive then stepAlive
+           else if state == Dead then stepDead
+           else if state == Won then stepWon
+           else Debug.crash "stepGame failed"
   in
-    func sysTime input { game | player <- player' }
+    func sysTime input { game | player = player' }
 
 unsafeHead : List a -> a
 unsafeHead xs = case xs of
@@ -479,22 +479,22 @@ stepAlive sysTime _ ({state,player,levelsLeft
     crash = not <| player `inLevel` level
     atGoal = last level `includes` player
     lastLevel = List.length levelsLeft == 1
-    levelsLeft' = if | atGoal && not lastLevel -> unsafeTail levelsLeft
-                     | otherwise -> levelsLeft
-    state' = if | atGoal && lastLevel -> Won
-                | crash -> Dead
-                | otherwise -> Alive
+    levelsLeft' = if atGoal && not lastLevel then unsafeTail levelsLeft
+                  else levelsLeft
+    state' = if atGoal && lastLevel then Won
+             else if crash then Dead
+             else Alive
     (oldTimeSum', lastRespawnTime') =
-      if | state' == Dead -> (oldTimeSum + sysTime - lastRespawnTime, sysTime)
-         | otherwise -> (oldTimeSum, lastRespawnTime)
+      if state' == Dead then (oldTimeSum + sysTime - lastRespawnTime, sysTime)
+      else (oldTimeSum, lastRespawnTime)
     timeSumPrec = oldTimeSum' + sysTime - lastRespawnTime'
     timeSum' = (round >> toFloat) (timeSumPrec / 100) / 10
   in
-    {game | state <- state',
-            levelsLeft <- levelsLeft',
-            lastRespawnTime <- lastRespawnTime',
-            oldTimeSum <- oldTimeSum',
-            timeSum <- timeSum' }
+    {game | state = state',
+            levelsLeft = levelsLeft',
+            lastRespawnTime = lastRespawnTime',
+            oldTimeSum = oldTimeSum',
+            timeSum = timeSum' }
 
 {-| Step game when player is dead. -}
 stepDead : Time.Time -> Input -> Game -> Game
@@ -502,25 +502,25 @@ stepDead sysTime _ ({state,player,levelsLeft,lastRespawnTime} as game) =
   let
     level = unsafeHead levelsLeft
     atStart = unsafeHead level `includes` player
-    state' = if | atStart -> Alive
-                | otherwise -> Dead
+    state' = if atStart then Alive
+             else Dead
   in
-    {game | state <- state',
-            lastRespawnTime <- sysTime}
+    {game | state = state',
+            lastRespawnTime = sysTime}
 
 {-| Step game when the game is finished. -}
 stepWon : Time.Time -> Input -> Game -> Game
 stepWon sysTime {clicked} ({state,player,levelsLeft,timeSum} as game) =
   let
-    (state',levelsLeft') = if | clicked -> (Dead,levels)
-                              | otherwise -> (Won,levelsLeft)
+    (state',levelsLeft') = if clicked then (Dead,levels)
+                           else (Won,levelsLeft)
     timeSum' = if state' == Dead then 0 else timeSum
   in
-    {game | levelsLeft <- levelsLeft',
-            state <- state',
-            lastRespawnTime <- sysTime,
-            oldTimeSum <- 0,
-            timeSum <- timeSum'}
+    {game | levelsLeft = levelsLeft',
+            state = state',
+            lastRespawnTime = sysTime,
+            oldTimeSum = 0,
+            timeSum = timeSum'}
 
 
 -- /---------\
@@ -541,7 +541,7 @@ displayLevelLine col thin k1 k2 =
   let
     p = levelKnotsToPath k1 k2
     colStyle = solid col
-    ls = { colStyle | width <- if thin then 1 else 2 * k1.r }
+    ls = { colStyle | width = if thin then 1 else 2 * k1.r }
   in
     p |> traced ls
 
